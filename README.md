@@ -31,6 +31,7 @@ These seven assets are the ones held in the personal portfolio studied in this p
 - Rolling 5-year period
 - Adjusted closing prices, converted to USD
 - Only the days when all assets have a price are kept
+- Conversion checked by hand on several portfolios, and tested with a stock quoted in CNY
 
 ## Project structure
 ```text
