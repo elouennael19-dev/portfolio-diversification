@@ -1,9 +1,9 @@
 # Portfolio Diversification Analysis
 
-Analysis of the effect of diversification on a portfolio of seven assets,
+Analysis of the effect of diversification on a portfolio of nine assets,
 from data collection to risk analysis.
 
-> Work in progress: the data preparation and individual asset analysis are done.
+> Work in progress: the data preparation, individual asset analysis and correlation analysis are done.
 
 ## Objective
 This project analyses how diversification affects the risk and return of an investment portfolio.
@@ -14,7 +14,7 @@ It has three goals:
 - Get a data-driven view of a personal investment portfolio
 
 ## Assets
-These seven assets are the ones held in the personal portfolio studied in this project.
+These nine assets are the ones held in the personal portfolio studied in this project.
 
 | Ticker | Asset | Category |
 |---|---|---|
@@ -25,6 +25,8 @@ These seven assets are the ones held in the personal portfolio studied in this p
 | AI.PA | Air Liquide | European equity |
 | MC.PA | LVMH | European equity |
 | IWDA.AS | iShares Core MSCI World | Global equity ETF |
+| EXS1.DE | iShares Core DAX | German equity ETF |
+| NVDA | NVIDIA | US equity |
 
 ## Method
 - Data from Yahoo Finance, via `yfinance`
@@ -36,9 +38,10 @@ These seven assets are the ones held in the personal portfolio studied in this p
 ## Project structure
 ```text
 notebooks/
-├── 01_data_collection.ipynb    Download, clean and convert the data
-└── 02_asset_analysis.ipynb     Returns, volatility and drawdown by asset
-requirements.txt                Python dependencies
+├── 01_data_collection.ipynb       Download, clean and convert the data
+├── 02_asset_analysis.ipynb        Returns, volatility and drawdown by asset
+└── 03_correlation_analysis.ipynb  Correlations: daily, weekly, rolling and during market stress
+requirements.txt                   Python dependencies
 ```
 
 ## Getting started
@@ -51,12 +54,12 @@ pip install -r requirements.txt
 ```
 
 Then run the notebooks in order. Notebook 01 downloads the data and creates
-`Data/Processed/dataset_clean.csv`, which notebook 02 uses.
+`Data/Processed/dataset_clean.csv`, which the following notebooks use.
 
 ## Roadmap
 - [x] Data collection and preparation
 - [x] Individual asset analysis
-- [ ] Correlations between assets
+- [x] Correlations between assets
 - [ ] Portfolio construction
 - [ ] Markowitz optimisation
 - [ ] Risk analysis (VaR, CVaR)
