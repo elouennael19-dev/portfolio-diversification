@@ -41,7 +41,13 @@ notebooks/
 ├── 01_data_collection.ipynb       Download, clean and convert the data
 ├── 02_asset_analysis.ipynb        Returns, volatility and drawdown by asset
 └── 03_correlation_analysis.ipynb  Correlations: daily, weekly, rolling and during market stress
-requirements.txt                   Python dependencies
+src/
+├── data.py                        Data collection and preparation, as functions (notebook 01)
+└── analysis.py                    Descriptive statistics by asset, as functions (notebook 02)
+app/
+├── streamlit_app.py               Web interface
+└── requirements.txt               Dependencies of the web interface
+requirements.txt                   Python dependencies of the notebooks
 ```
 
 ## Getting started
@@ -55,6 +61,17 @@ pip install -r requirements.txt
 
 Then run the notebooks in order. Notebook 01 downloads the data and creates
 `Data/Processed/dataset_clean.csv`, which the following notebooks use.
+
+## Web interface
+The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters:
+choose the tickers, the base currency and the period, then compare the assets
+(price evolution, summary table, return vs risk, drawdown).
+
+Run it locally:
+```bash
+pip install -r app/requirements.txt
+streamlit run app/streamlit_app.py
+```
 
 ## Roadmap
 - [x] Data collection and preparation
