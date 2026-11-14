@@ -3,7 +3,9 @@
 Analysis of the effect of diversification on a portfolio of nine assets,
 from data collection to risk analysis.
 
-> Work in progress: the data preparation, individual asset analysis and correlation analysis are done.
+**Live app: [elouennael19dev-portfolio-diversification.streamlit.app](https://elouennael19dev-portfolio-diversification.streamlit.app)**
+
+> Work in progress: the data preparation and the individual asset analysis are done; the correlation analysis is in progress.
 
 ## Objective
 This project analyses how diversification affects the risk and return of an investment portfolio.
@@ -63,9 +65,12 @@ Then run the notebooks in order. Notebook 01 downloads the data and creates
 `Data/Processed/dataset_clean.csv`, which the following notebooks use.
 
 ## Web interface
-The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters, in two steps:
-1. **Build your portfolio**: search assets by name, review the list, choose the currency and the period.
-2. **Read the report**: a short written summary, key figures, return vs risk, price evolution, falls and the full table.
+**Try it online: [elouennael19dev-portfolio-diversification.streamlit.app](https://elouennael19dev-portfolio-diversification.streamlit.app)**
+
+The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters, on three screens:
+0. **Project**: a timeline of the project steps and the approach behind each notebook.
+1. **Portfolio**: search assets by name (or pick popular ones), review the list, choose the currency and the period.
+2. **Report**: key figures, return vs risk, growth of 100 (with log scale and period buttons), drawdowns and the full table.
 
 The parameters are stored in the page URL, so a link reopens the same report.
 
@@ -78,7 +83,7 @@ streamlit run app/streamlit_app.py
 ## Roadmap
 - [x] Data collection and preparation
 - [x] Individual asset analysis
-- [x] Correlations between assets
+- [ ] Correlations between assets (in progress)
 - [ ] Portfolio construction
 - [ ] Markowitz optimisation
 - [ ] Risk analysis (VaR, CVaR)
