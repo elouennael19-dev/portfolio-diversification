@@ -63,9 +63,11 @@ Then run the notebooks in order. Notebook 01 downloads the data and creates
 `Data/Processed/dataset_clean.csv`, which the following notebooks use.
 
 ## Web interface
-The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters:
-choose the tickers, the base currency and the period, then compare the assets
-(price evolution, summary table, return vs risk, drawdown).
+The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters, in two steps:
+1. **Build your portfolio**: search assets by name, review the list, choose the currency and the period.
+2. **Read the report**: a short written summary, key figures, return vs risk, price evolution, falls and the full table.
+
+The parameters are stored in the page URL, so a link reopens the same report.
 
 Run it locally:
 ```bash

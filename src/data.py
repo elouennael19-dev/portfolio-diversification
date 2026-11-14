@@ -43,6 +43,31 @@ def get_currencies(tickers):
     return currency_by_ticker
 
 
+SEARCHABLE_TYPES = {"EQUITY", "ETF", "CRYPTOCURRENCY", "MUTUALFUND", "INDEX"}
+
+
+def search_assets(query, max_results=10):
+    """Search Yahoo Finance by name or ticker.
+
+    Returns a list of dicts: symbol, name, exchange, type.
+    """
+    query = query.strip()
+    if len(query) < 2:
+        return []
+    quotes = yf.Search(query, max_results=max_results, news_count=0).quotes
+    results = []
+    for quote in quotes:
+        if quote.get("quoteType") not in SEARCHABLE_TYPES or not quote.get("symbol"):
+            continue
+        results.append({
+            "symbol": quote["symbol"],
+            "name": (quote.get("longname") or quote.get("shortname") or quote["symbol"]).strip(),
+            "exchange": quote.get("exchDisp") or quote.get("exchange") or "",
+            "type": quote.get("typeDisp") or quote.get("quoteType", "").title(),
+        })
+    return results
+
+
 def get_asset_names(tickers):
     """Return {ticker: short name}, falling back to the ticker itself."""
     name_by_ticker = {}
