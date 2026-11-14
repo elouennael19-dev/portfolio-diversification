@@ -44,6 +44,7 @@ python-dateutil==3.0.0
 pytz==2026.5
 pyzmq==27.2.0
 requests==2.34.2
+seaborn==0.13.2
 six==1.17.0
 soupsieve==3.0.4
 stack-data==0.6.3
