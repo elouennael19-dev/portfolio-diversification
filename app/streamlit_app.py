@@ -1,4 +1,4 @@
-"""Web interface for parts 1 and 2 of the project.
+"""Web interface for parts 1 to 3 of the project.
 
 Two screens:
   1. Portfolio - search assets (or pick popular ones), review the list, choose currency and period.
@@ -20,7 +20,11 @@ import charts  # noqa: E402
 import style  # noqa: E402
 import timeline  # noqa: E402
 import author  # noqa: E402
-from src.analysis import build_summary, compute_drawdown, normalise_prices  # noqa: E402
+from src.analysis import build_summary, compute_drawdown, compute_returns, normalise_prices  # noqa: E402
+from src.correlation import (EXTREME_SHARE, REFERENCE_TICKER, ROLLING_WINDOW,  # noqa: E402
+                             compute_average_correlation, compute_correlation, compute_extreme_days,
+                             compute_portfolio_average_correlation, compute_rolling_correlation,
+                             compute_weekly_returns, correlation_pairs)
 from src.data import DataError, build_dataset, get_asset_names, search_assets  # noqa: E402
 
 EXAMPLE_PORTFOLIO = {
@@ -36,9 +40,11 @@ POPULAR = {
 CURRENCIES = ["USD", "EUR", "GBP", "CHF", "JPY"]
 PERIODS = [1, 3, 5, 10]
 MAX_HIGHLIGHT = 3
-SECTIONS = ["Overview", "Performance", "Risk", "Data"]
+SECTIONS = ["Overview", "Performance", "Risk", "Correlations", "Data"]
 SECTION_ICONS = {"Overview": ":material/dashboard:", "Performance": ":material/trending_up:",
-                 "Risk": ":material/waterfall_chart:", "Data": ":material/table_rows:"}
+                 "Risk": ":material/waterfall_chart:", "Correlations": ":material/grid_on:",
+                 "Data": ":material/table_rows:"}
+CORR_VIEWS = ["Weekly", "Daily", "Weekly − daily"]
 MIN_ASSETS = 2
 
 
@@ -59,8 +65,9 @@ def html(markup, target=st):
     target.markdown(markup, unsafe_allow_html=True)
 
 
-def show(chart, height=None):
-    st.altair_chart(charts.styled(chart, height), theme=None, width="stretch")
+def show(chart, height=None, stretch=True, key=None):
+    target = st.container(key=key) if key else st
+    target.altair_chart(charts.styled(chart, height), theme=None, width="stretch" if stretch else "content")
 
 
 def title(text, sub=None, label=None):
@@ -223,6 +230,127 @@ def asset_detail(ticker, names, summary, display, info, currency, period):
     show(charts.underwater(compute_drawdown(display[[name]]), [name], one), height=300)
 
 
+def reading(markup, warning=""):
+    """Short automatic reading under a chart (computed, so it follows the data)."""
+    html(f'<div class="read">{markup}' + (f'<span class="warn">{style.esc(warning)}</span>' if warning else "")
+         + "</div>")
+
+
+def pair_name(pair):
+    return f"{pair[0]} & {pair[1]}"
+
+
+def correlation_section(prices, names):
+    """Part 3 (notebook 03): how the assets move together."""
+    display = prices.rename(columns=names)
+    short = {names.get(t, t): t for t in prices.columns}  # tickers on the heatmap axes
+    returns = compute_returns(display)
+    daily = compute_correlation(returns)
+    weekly = compute_correlation(compute_weekly_returns(display))
+    pairs = correlation_pairs(weekly)  # weekly by default: fairer between markets with different hours
+    average = compute_average_correlation(weekly)  # weekly, as in notebook 03
+    portfolio_average = compute_portfolio_average_correlation(weekly)
+
+    # Reference = MSCI World when it is in the portfolio, otherwise chosen by the user
+    if REFERENCE_TICKER in prices.columns:
+        reference = names.get(REFERENCE_TICKER, REFERENCE_TICKER)
+        ref_note = f"Reference: {reference}, used as the global market."
+    else:
+        ref_note = ""
+        reference = st.selectbox(
+            "Reference asset (the market)", list(display.columns), key="corr_ref",
+            help="The MSCI World (IWDA.AS) is used when it is in the portfolio. Otherwise, pick the asset that best "
+                 "represents the market for you: the rolling and stress charts compare everything with it.")
+    extreme = compute_extreme_days(returns, reference)
+    worst_minus_best = extreme["worst_minus_best"]
+    stress_pairs = correlation_pairs(worst_minus_best)
+    others = [a for a in display.columns if a != reference]
+
+    html(style.cards([
+        ("target", "Most linked", f"{pairs.max():.2f}", pair_name(pairs.idxmax()), "weekly correlation"),
+        ("pulse", "Best diversifier", f"{average.iloc[0]:.2f}", average.index[0], "weekly, average with the others")
+        if len(average) > 2 else ("pulse", "Least linked", f"{pairs.min():.2f}", pair_name(pairs.idxmin()),
+                                  "weekly correlation"),
+        ("up", "Portfolio score", f"{portfolio_average:.2f}", f"{len(pairs)} pairs", "weekly average correlation"),
+        ("down", "In falls", f"{(stress_pairs > 0).sum()} / {len(stress_pairs)}", "pairs more linked",
+         "worst vs best days"),
+    ]))
+
+    # --- 1. Correlation matrix
+    title("Correlation matrix", "Every pair of assets (the diagonal is each asset with itself). +1: they move together. 0: independent, which already reduces "
+          "risk. -1: opposite moves.", label="Chart")
+    view = st.segmented_control("Matrix", CORR_VIEWS, key="corr_view", default=CORR_VIEWS[0],
+                                label_visibility="collapsed") or CORR_VIEWS[0]
+    if view == "Weekly − daily":
+        diff = weekly - daily
+        show(charts.correlation_heatmap(diff, limit=0.4, short=short), stretch=False, key="matrix_diff")
+        biggest = correlation_pairs(diff)
+        reading(f"Red: more linked with weekly returns. The biggest increase is <b>{style.esc(pair_name(biggest.idxmax()))}"
+                f"</b> ({biggest.max():+.2f}). Markets close at different times (Europe 17:30, New York 22:00, "
+                "crypto never): a move after the European close shows up the next day, which lowers daily "
+                "correlations between markets. Weekly returns reduce this effect.")
+    else:
+        matrix = daily if view == "Daily" else weekly
+        view_pairs, view_average = correlation_pairs(matrix), compute_average_correlation(matrix)
+        show(charts.correlation_heatmap(matrix, value_format=".2f", short=short), stretch=False, key="matrix_main")
+        top = view_pairs.max()
+        text = f"Most linked: <b>{style.esc(pair_name(view_pairs.idxmax()))}</b> ({top:.2f})"
+        text += ", so holding both adds little diversification." if top >= 0.6 else "."
+        if len(view_average) > 2:
+            text += (f" Least linked to the rest: <b>{style.esc(view_average.index[0])}</b> "
+                     f"({view_average.iloc[0]:.2f} on average).")
+        reading(text,
+                "Daily returns: markets close at different times, which lowers the links between them."
+                if view == "Daily" else "Weekly returns (last price of each week): fairer between markets that close at "
+                "different times. Computed on returns, not prices.")
+
+    # --- 2. Rolling correlation
+    title(f"Correlation with {reference} over time", f"Moving window of {ROLLING_WINDOW} trading days (about 3 "
+          "months). One number over the whole period is an average: this shows whether the link holds. Daily returns: "
+          "weekly ones would leave too few points in each window.",
+          label="Chart")
+    if ref_note:
+        st.caption(ref_note)
+    if len(returns) < ROLLING_WINDOW * 2:
+        st.info(f"The period is too short for a {ROLLING_WINDOW}-day rolling correlation. Choose a longer period.")
+    else:
+        rolling = compute_rolling_correlation(returns, reference)
+        spread = (rolling.max() - rolling.min()).sort_values()
+        default = list(dict.fromkeys([rolling.mean().idxmax(), rolling.mean().abs().idxmin(), spread.index[-1]]))
+        highlighted = st.pills("Highlight correlation", others, selection_mode="multi", default=default,
+                               key="corr_highlight", label_visibility="collapsed")[:MAX_HIGHLIGHT]
+        show(charts.rolling_lines(rolling, highlighted, stable_colors(highlighted, "corr_colors")), height=380)
+        stable, swing = spread.index[0], spread.index[-1]
+        if stable == swing:
+            text = (f"<b>{style.esc(stable)}</b> moves between {rolling[stable].min():+.2f} and "
+                    f"{rolling[stable].max():+.2f}.")
+        else:
+            text = (f"Most stable: <b>{style.esc(stable)}</b> (between {rolling[stable].min():+.2f} and "
+                    f"{rolling[stable].max():+.2f}). Biggest swing: <b>{style.esc(swing)}</b> (from "
+                    f"{rolling[swing].min():+.2f} to {rolling[swing].max():+.2f}).")
+        reading(text + " A correlation is not fixed over time: the average alone is not enough.")
+
+    # --- 3. Market stress
+    share = f"{EXTREME_SHARE:.0%}"
+    title(f"When {reference} falls", f"Correlation on its {share} worst days minus its {share} best days. Red: the "
+          "pair moves together more when the market falls. Daily returns: weekly ones would leave too few weeks.",
+          label="Chart")
+    show(charts.correlation_heatmap(worst_minus_best, limit=0.5, short=short), stretch=False, key="matrix_stress")
+    worst_with_ref = extreme["worst_corr"][reference].drop(reference).sort_values(key=abs)
+    n_up, n_pairs = int((stress_pairs > 0).sum()), len(stress_pairs)
+    text = (f"{extreme['n_worst']} worst days (at most {extreme['worst_threshold']:.1%}) against {extreme['n_best']} "
+            "best days. Comparing the two removes a bias: keeping only extreme days lowers every correlation. ")
+    if n_pairs == 1:
+        text += f"This pair is <b>{'more' if n_up else 'less'} linked</b> when the market falls."
+    else:
+        text += f"<b>{n_up} of {n_pairs}</b> pairs are more linked when the market falls."
+    least, least_value = worst_with_ref.index[0], worst_with_ref.iloc[0]
+    if len(worst_with_ref) > 1 and abs(least_value) < 0.3:
+        text += (f" On the worst days, the least linked to {style.esc(reference)} is <b>{style.esc(least)}</b> "
+                 f"({least_value:+.2f}): it still diversifies when it is needed most.")
+    reading(text)
+
+
 # ================================================================= screen 0: project timeline
 def project_page():
     done = sum(s["status"] == "done" for s in timeline.STEPS)
@@ -356,6 +484,7 @@ def report_page():
             best_ratio = summary["Return / risk ratio"].idxmax()
             most_vol = summary["Annual volatility (%)"].idxmax()
             worst_dd = summary["Max drawdown (%)"].idxmin()
+            portfolio_corr = compute_portfolio_average_correlation(compute_correlation(compute_weekly_returns(prices)))
 
             focus = st.session_state.get("focus")
             if focus in prices.columns:
@@ -373,7 +502,9 @@ def report_page():
                          "typical move per year"),
                         ("down", "Deepest fall", f"{summary.loc[worst_dd, 'Max drawdown (%)']:.0f}%", worst_dd,
                          "from a previous peak"),
-                    ]))
+                        ("target", "Correlation", f"{portfolio_corr:.2f}", "portfolio score",
+                         "weekly average of all pairs"),
+                    ], "five"))
                     title("Return vs risk", "Top left is best: more return for less volatility.", label="Chart")
                     show(charts.return_risk_scatter(summary), height=440)
                     st.write("")
@@ -413,6 +544,9 @@ def report_page():
                                               key="dd_highlight", label_visibility="collapsed")[:MAX_HIGHLIGHT]
                     show(charts.underwater(compute_drawdown(display), dd_highlighted,
                                            stable_colors(dd_highlighted, "dd_colors")), height=380)
+
+                if section == "Correlations":
+                    correlation_section(prices, names)
 
                 if section == "Data":
                     title("All figures", "Annualised with the number of common trading days actually observed.")

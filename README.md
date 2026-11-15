@@ -45,7 +45,8 @@ notebooks/
 └── 03_correlation_analysis.ipynb  Correlations: daily, weekly, rolling and during market stress
 src/
 ├── data.py                        Data collection and preparation, as functions (notebook 01)
-└── analysis.py                    Descriptive statistics by asset, as functions (notebook 02)
+├── analysis.py                    Descriptive statistics by asset, as functions (notebook 02)
+└── correlation.py                 Correlations between assets, as functions (notebook 03)
 app/
 ├── streamlit_app.py               Web interface
 └── requirements.txt               Dependencies of the web interface
@@ -67,10 +68,10 @@ Then run the notebooks in order. Notebook 01 downloads the data and creates
 ## Web interface
 **Try it online: [elouennael19dev-portfolio-diversification.streamlit.app](https://elouennael19dev-portfolio-diversification.streamlit.app)**
 
-The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters, on three screens:
+The `app/` folder contains a Streamlit interface that runs parts 1 to 3 with your own parameters, on three screens:
 0. **Project**: a timeline of the project steps and the approach behind each notebook.
 1. **Portfolio**: search assets by name (or pick popular ones), review the list, choose the currency and the period.
-2. **Report**: key figures, return vs risk, growth of 100, drawdowns and the full table — the same indicators as notebooks 01 and 02.
+2. **Report**: key figures, return vs risk, growth of 100, drawdowns, correlations (matrix, rolling, market stress) and the full table — the same indicators as notebooks 01 to 03.
 
 The parameters are stored in the page URL, so a link reopens the same report.
 

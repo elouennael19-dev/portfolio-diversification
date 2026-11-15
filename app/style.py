@@ -276,7 +276,7 @@ a.tl-code:hover .tl-code-bar b {{ color: #93b4ff; }}
 .cards.five .v {{ font-size: clamp(1.2rem, 1.8vw, 1.75rem); }}
 .cards.five {{ margin-top: 1rem; gap: .6rem; }}
 .cards.five .card {{ padding: .9rem .85rem; min-width: 0; }}
-.cards.five .top {{ font-size: .58rem; letter-spacing: .06em; gap: .4rem; overflow: hidden; }}
+.cards.five .top {{ font-size: .56rem; letter-spacing: .02em; gap: .35rem; overflow: hidden; }}
 .cards.five .top > span:last-child, .cards.five .top {{ text-overflow: ellipsis; }}
 .cards.five .ic {{ flex-basis: 22px; width: 22px; height: 22px; }}
 .cards.five .v {{ margin: .65rem 0 .3rem; }}
@@ -371,6 +371,15 @@ a.tl-code:hover .tl-code-bar b {{ color: #93b4ff; }}
 .label {{ font-family: var(--mono); font-size:.7rem; letter-spacing:.18em; text-transform:uppercase; color: var(--muted); margin:.2rem 0 .45rem; }}
 .h {{ font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 .2rem; }}
 .sub {{ color: var(--ink-2); font-size: .9rem; margin: 0 0 1rem; }}
+/* Correlation matrix: keeps square cells and shrinks to fit a phone */
+[class*="st-key-matrix_"] [data-testid="stVegaLiteChart"], [class*="st-key-matrix_"] .vega-embed {{ max-width: 100% !important; }}
+[class*="st-key-matrix_"] canvas, [class*="st-key-matrix_"] svg.marks {{ max-width: 100% !important; height: auto !important; }}
+
+/* Automatic reading under a chart */
+.read {{ border-left: 2px solid var(--accent); background: var(--surface); border-radius: 0 10px 10px 0;
+  padding: .7rem .95rem; margin: .4rem 0 1.8rem; color: var(--ink-2); font-size: .88rem; line-height: 1.55; }}
+.read b {{ color: var(--ink); font-weight: 650; }}
+.read .warn {{ display:block; margin-top:.35rem; color: var(--muted); font-size:.8rem; }}
 .cap {{ font-family: var(--mono); font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }}
 
 /* Asset rows */

@@ -140,9 +140,9 @@ STEPS = [
         "num": "08", "title": "Functions and interface", "status": "progress", "where": "src/ · app/",
         "summary": "Notebook code → functions → this web app.",
         "points": [
-            "Steps 01–02 as functions in src/",
+            "Steps 01–03 as functions in src/",
             "Web app: search, report, shareable links",
-            "To do: add correlations",
+            "Correlations: matrix, rolling, market stress",
         ],
     },
 ]

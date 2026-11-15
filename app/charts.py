@@ -233,3 +233,62 @@ def lollipops(summary, column, value_format, signed=False):
         x=alt.X(f"{field}:Q", scale=x_scale), text="label:N")
     zero = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(color=AXIS).encode(x=alt.X("x:Q", scale=x_scale))
     return alt.layer(zero, stem, dot, text_pos, text_neg).properties(height=max(200, 36 * len(data)))
+
+
+# ================================================================= correlations (part 3)
+NEUTRAL_CELL = "#ececea"
+
+
+def correlation_heatmap(matrix, limit=1.0, value_format="+.2f", short=None):
+    """Full correlation matrix with its diagonal, square cells: blue below 0, grey at 0,
+    warm above 0, as in notebook 03 (red = the assets move together).
+    short: optional {asset name: short label} for the axes (tickers fit on a phone)."""
+    short = short or {}
+    assets = list(matrix.columns)
+    labels = [short.get(a, a) for a in assets]
+    rows = []
+    for i, a in enumerate(assets):
+        for j, b in enumerate(assets):
+            rows.append({"Row": labels[i], "Column": labels[j], "Asset": a, "With": b,
+                         "Value": float(matrix.loc[a, b])})
+    data = pd.DataFrame(rows)
+    data["label"] = data["Value"].map(lambda v: format(v, value_format).replace("+0.00", "0.00"))
+    data["strong"] = data["Value"].abs() >= limit * 0.6
+    cell = min(90, max(52, 540 // len(assets)))  # square cells, bigger when there are few assets
+    size = cell * len(assets)
+    color = alt.Color("Value:Q", legend=alt.Legend(title=None, orient="bottom", gradientLength=min(220, size - 50), gradientThickness=8,
+                                                   format=value_format, tickCount=5, direction="horizontal"),
+                      scale=alt.Scale(domain=[-limit, 0, limit], range=[ACCENT, NEUTRAL_CELL, NEGATIVE], clamp=True,
+                                                      interpolate="lab"))
+    label_axis = dict(domain=False, ticks=False, labelFont=MONO, labelFontSize=10, labelColor=INK_2, labelLimit=150)
+    x = alt.X("Column:N", sort=labels, title=None, axis=alt.Axis(orient="bottom", labelAngle=-45, **label_axis))
+    y = alt.Y("Row:N", sort=labels, title=None, axis=alt.Axis(**label_axis))
+    base = alt.Chart(data).encode(x=x, y=y)
+    cells = base.mark_rect(cornerRadius=4, stroke=SURFACE, strokeWidth=2).encode(
+        color=color, tooltip=[alt.Tooltip("Asset:N"), alt.Tooltip("With:N"),
+                              alt.Tooltip("Value:Q", title="Correlation", format=value_format)])
+    text = base.mark_text(font=MONO, fontSize=10 if cell >= 52 else 9).encode(
+        text="label:N", color=alt.condition(alt.datum.strong, alt.value("#ffffff"), alt.value(INK)))
+    return alt.layer(cells, text).properties(width=size, height=size)
+
+
+def rolling_lines(rolling, highlighted, color_by_asset):
+    """Rolling correlation with the reference: highlighted assets in colour, the others in grey."""
+    value_name = "Correlation"
+    data = to_long(rolling, value_name).dropna()
+    start, end = rolling.index.min(), rolling.index.max()
+    x_scale = alt.Scale(domain=[start.isoformat(), (end + (end - start) * 0.2).isoformat()])
+    y = alt.Y(f"{value_name}:Q", title=None, scale=alt.Scale(domain=[-1, 1]),
+              axis=alt.Axis(format=".1f", values=[-1, -0.5, 0, 0.5, 1]))
+    zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=INK_2, strokeWidth=1).encode(y="y:Q")
+    context = alt.Chart(data).transform_filter(~alt.FieldOneOfPredicate(field="Asset", oneOf=list(highlighted))).mark_line(
+        strokeWidth=1, color=CONTEXT_LINE).encode(
+        x=alt.X("Date:T", title=None, scale=x_scale, axis=_year_axis(start, end)), y=y, detail="Asset:N",
+        tooltip=[alt.Tooltip("Asset:N"), alt.Tooltip("Date:T", format="%d %b %Y"),
+                 alt.Tooltip(f"{value_name}:Q", format="+.2f")])
+    layers = [context, zero]
+    if highlighted:
+        focus = _focus_layers(data, x_scale, value_name, "+.2f", highlighted, color_by_asset, 0,
+                              lambda a, v: f"{a}  {v:+.2f}")
+        layers += focus[len(highlighted):]  # no gradient fill: the lines cross 0
+    return alt.layer(*layers)
