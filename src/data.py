@@ -15,6 +15,9 @@ SUBUNIT_CURRENCIES = {
 }
 
 
+MIN_COMMON_DAYS = 20  # about one month: below this, returns and correlations mean little
+
+
 class DataError(ValueError):
     """Raised when the data cannot be built from the given parameters."""
 
@@ -115,10 +118,11 @@ def clean_prices(raw_close):
             "The ticker or the exchange rate may not exist on Yahoo Finance."
         )
     clean = raw_close.dropna()
-    if clean.empty:
+    if len(clean) < MIN_COMMON_DAYS:
         raise DataError(
-            "No common trading day left after removing missing values. "
-            "Try a longer period or different assets."
+            f"Only {len(clean)} common trading day{'s' if len(clean) != 1 else ''} left after removing missing "
+            f"values (at least {MIN_COMMON_DAYS} are needed). One asset may be too recent or rarely traded: "
+            "try a longer period or different assets."
         )
     return clean, len(raw_close), len(clean)
 
