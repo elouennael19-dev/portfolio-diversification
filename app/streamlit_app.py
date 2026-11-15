@@ -125,6 +125,15 @@ def go_build():
     st.query_params.clear()
 
 
+def set_focus(ticker):
+    """Click on an asset in the portfolio panel: show its detail; click again to go back."""
+    st.session_state["focus"] = None if st.session_state.get("focus") == ticker else ticker
+
+
+def clear_focus():
+    st.session_state["focus"] = None
+
+
 def go_project():
     st.session_state["step"] = "project"
     st.query_params.clear()
@@ -149,14 +158,69 @@ def navigate():
             st.toast(f"Add at least {MIN_ASSETS} assets to see the report.")
 
 
+def close_nudge():
+    st.session_state["nudge_closed"] = True
+
+
+def open_project_from_nudge():
+    st.session_state["nudge_closed"] = True
+    go_project()
+
+
+def project_nudge():
+    """Small floating card (bottom right) inviting visitors to look at the project page."""
+    with st.container(key="nudge"):
+        html(style.nudge(author.PHOTO, "Hi, I'm Elouen 👋",
+                         "Your future data intern. Curious how I built this? Take a look at my process."))
+        a, b = st.columns([3, 1], vertical_alignment="center")
+        a.button("See my process", key="nudge_go", type="primary", icon=":material/arrow_forward:",
+                 on_click=open_project_from_nudge, width="stretch")
+        b.button("Later", key="nudge_close", type="tertiary", on_click=close_nudge)
+
+
 def app_bar(step, meta=""):
     """Top bar: mark on the left, clickable navigation in the middle, context on the right.
     step: 0 = project, 1 = portfolio, 2 = report."""
     st.session_state["nav"] = NAV[step]
+    if step in (1, 2) and not st.session_state.get("nudge_closed"):
+        project_nudge()
     left, middle, right = st.columns([1, 1.5, 1], vertical_alignment="center")
     html(style.mark(), left)
     middle.segmented_control("Navigation", NAV, key="nav", on_change=navigate, label_visibility="collapsed")
     html(f'<div class="appmeta">{style.esc(meta)}</div>', right)
+
+
+# ================================================================= report helpers
+def asset_grid(df, value_name, y_format):
+    """One small chart per asset, two per row, each with its own scale (fits any width)."""
+    columns = list(df.columns)
+    for start in range(0, len(columns), 2):
+        cols = st.columns(2, gap="medium")
+        for col, asset in zip(cols, columns[start:start + 2]):
+            with col:
+                show(charts.small_chart(df[[asset]], value_name, y_format), height=150)
+
+
+def asset_detail(ticker, names, summary, display, info, currency, period):
+    """Analysis of one asset only: the same indicators as the portfolio view (notebook 02)."""
+    name = names.get(ticker, ticker)
+    row = summary.loc[name]
+    head, close = st.columns([5, 1], vertical_alignment="center")
+    html(style.asset_header(name, ticker, info["currency_by_ticker"].get(ticker, ""), currency, period), head)
+    close.button("Close", key="close_focus", type="tertiary", icon=":material/close:", on_click=clear_focus)
+    html(style.cards([
+        ("up", "Total return", f"{row['Total return (%)']:+.1f}%", "whole period", ""),
+        ("up", "Annual", f"{row['Annual return (%)']:+.1f}%", "per year", ""),
+        ("pulse", "Volatility", f"{row['Annual volatility (%)']:.1f}%", "per year", ""),
+        ("target", "Ratio", f"{row['Return / risk ratio']:.2f}", "return ÷ risk", ""),
+        ("down", "Deepest fall", f"{row['Max drawdown (%)']:.1f}%", "from a peak", ""),
+    ], "five"))
+    title("Growth of 100", "The asset starts at 100 at the beginning of the period.", label="Chart")
+    one = {name: style.SERIES[0]}
+    show(charts.comparison_lines(normalise_prices(display[[name]]), [name], one), height=360)
+    st.write("")
+    title("Under water", "How far the asset sat below its previous peak, day after day.", label="Chart")
+    show(charts.underwater(compute_drawdown(display[[name]]), [name], one), height=300)
 
 
 # ================================================================= screen 0: project timeline
@@ -164,11 +228,10 @@ def project_page():
     done = sum(s["status"] == "done" for s in timeline.STEPS)
     app_bar(0, f"{done} of {len(timeline.STEPS)} steps done")
     with st.container(key="page_project"):
-        main, side = st.columns([2.3, 1], gap="large")
-        html(style.timeline(timeline.INTRO, timeline.STEPS), main)
-        with side, st.container(key="profile"):
-            html(style.profile_card(author.NAME, author.HANDLE, author.PRONOUNS, author.PHOTO,
-                                    author.BIO, author.STATUS, author.LINKS))
+        html('<div class="p-top"><div>' + style.timeline_head(timeline.INTRO, timeline.CREDITS, timeline.STEPS)
+             + '</div>' + style.profile_card(author.NAME, author.HANDLE, author.PRONOUNS, author.PHOTO,
+                                             author.BIO, author.STATUS, author.LINKS) + '</div>')
+        html(style.timeline_steps(timeline.STEPS))
 
 
 # ================================================================= screen 1: portfolio
@@ -266,7 +329,7 @@ def report_page():
         with st.container(key="reportnav"):
             nav_left, nav_right = st.columns([2, 1], vertical_alignment="center")
             section = nav_left.segmented_control(
-                "Section", SECTIONS, key="section", default=SECTIONS[0], label_visibility="collapsed",
+                "Section", SECTIONS, key="section", default=SECTIONS[0], label_visibility="collapsed", on_change=clear_focus,
                 format_func=lambda s: f"{SECTION_ICONS[s]} {s}") or SECTIONS[0]
             html(f'<div class="navctx">{len(assets)} assets · {years}Y · {info["rows_after"]:,} trading days</div>',
                  nav_right)
@@ -278,11 +341,14 @@ def report_page():
             title("Portfolio", f"Ranked by annual return, in {currency}", label="Holdings")
             normalised = normalise_prices(prices)
             by_return = summary.sort_values("Annual return (%)", ascending=False)
-            for ticker in by_return.rename(index={v: k for k, v in names.items()}).index:
+            focus = st.session_state.get("focus")
+            for i, ticker in enumerate(by_return.rename(index={v: k for k, v in names.items()}).index):
                 name = names.get(ticker, ticker)
                 right = style.sparkline(normalised[ticker]) + style.change_chip(summary.loc[name, "Annual return (%)"])
-                html(style.asset_row(name, ticker, right=right))
-                st.write("")
+                with st.container(key=f"assetrow_{'on' if ticker == focus else 'off'}_{i}"):
+                    html(style.asset_row(name, ticker, right=right))
+                    st.button(f"Details for {name}", key=f"focus_{ticker}", on_click=set_focus, args=(ticker,))
+            st.caption("Click an asset to see its own analysis.")
             st.button("Edit portfolio", icon=":material/edit:", on_click=go_build, width="stretch")
 
         with main:
@@ -291,7 +357,13 @@ def report_page():
             most_vol = summary["Annual volatility (%)"].idxmax()
             worst_dd = summary["Max drawdown (%)"].idxmin()
 
-            with st.container(key=f"sec_{section.lower()}"):  # new key per section -> fade-in
+            focus = st.session_state.get("focus")
+            if focus in prices.columns:
+                with st.container(key=f"sec_asset_{list(prices.columns).index(focus)}"):
+                    asset_detail(focus, names, summary, display, info, currency, period)
+                section = None  # the analysis sections are hidden while an asset is open
+
+            with st.container(key=f"sec_{(section or 'none').lower()}"):  # new key per section -> fade-in
                 if section == "Overview":
                     html(style.cards([
                         ("up", "Best return", f"{summary.loc[best_ret, 'Annual return (%)']:+.1f}%", best_ret, "per year"),
@@ -302,9 +374,8 @@ def report_page():
                         ("down", "Deepest fall", f"{summary.loc[worst_dd, 'Max drawdown (%)']:.0f}%", worst_dd,
                          "from a previous peak"),
                     ]))
-                    title("Return vs risk", "Top left is best: more return for less volatility. "
-                          "Bigger bubbles fell further from their peak.", label="Chart")
-                    show(charts.return_risk_bubbles(summary), height=440)
+                    title("Return vs risk", "Top left is best: more return for less volatility.", label="Chart")
+                    show(charts.return_risk_scatter(summary), height=440)
                     st.write("")
                     title("Return per unit of risk", "Annual return divided by annual volatility (not a Sharpe ratio: "
                                                       "no risk-free rate).")
@@ -319,19 +390,11 @@ def report_page():
                     if len(highlighted) > MAX_HIGHLIGHT:
                         st.caption(f"Only the first {MAX_HIGHLIGHT} are coloured.")
                         highlighted = highlighted[:MAX_HIGHLIGHT]
-                    windows = [w for w in (1, 3, 5) if w < years] + ["All"]
-                    c1, c2 = st.columns([3, 1], vertical_alignment="center")
-                    window = c1.segmented_control("Window", windows, default="All", key="window",
-                                                  format_func=lambda w: w if w == "All" else f"{w}Y",
-                                                  label_visibility="collapsed") or "All"
-                    log = c2.toggle("Log scale", key="log", help="Equal distances mean equal % changes: "
-                                    "useful when one asset dwarfs the others.")
-                    shown = display if window == "All" else display[display.index >= display.index.max() - pd.DateOffset(years=window)]
-                    show(charts.comparison_lines(normalise_prices(shown), highlighted, stable_colors(highlighted), log=log),
+                    show(charts.comparison_lines(normalise_prices(display), highlighted, stable_colors(highlighted)),
                          height=440)
-                    st.caption("× = value at the end divided by the value at the start of the window.")
+                    st.caption("× = value at the end divided by the value at the start of the period.")
                     with st.expander("Each asset on its own scale"):
-                        show(charts.small_multiples(normalise_prices(shown), "Growth of 100", ",.0f", independent_y=True))
+                        asset_grid(normalise_prices(display), "Growth of 100", ",.0f")
 
                 if section == "Risk":
                     a, b = st.columns(2, gap="medium")
@@ -343,8 +406,8 @@ def report_page():
                         title("Volatility", "Typical size of the moves, in % per year.", label="Ranking")
                         show(charts.lollipops(summary, "Annual volatility (%)", ".0f"))
                     st.write("")
-                    title("Under water", "How far each asset sat below its previous peak, day after day. "
-                          "The worst point is marked.", label="Chart")
+                    title("Under water", "How far each asset sat below its previous peak, day after day.",
+                          label="Chart")
                     dd_default = list(dict.fromkeys([worst_dd, summary["Max drawdown (%)"].idxmax()]))
                     dd_highlighted = st.pills("Highlight drawdown", assets, selection_mode="multi", default=dd_default,
                                               key="dd_highlight", label_visibility="collapsed")[:MAX_HIGHLIGHT]

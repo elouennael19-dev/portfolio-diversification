@@ -92,13 +92,13 @@ def _focus_layers(data, x_scale, value_name, y_format, highlighted, color_by_ass
     return layers + [lines, rule, dots, end_points, end_labels]
 
 
-def comparison_lines(df, highlighted, color_by_asset, log=False):
+def comparison_lines(df, highlighted, color_by_asset):
     """Growth of 100: every asset in light grey for context, highlighted ones in colour."""
     value_name = "Growth of 100"
     data = to_long(df, value_name)
     start, end = df.index.min(), df.index.max()
     x_scale = alt.Scale(domain=[start.isoformat(), (end + (end - start) * 0.2).isoformat()])
-    y_scale = alt.Scale(type="log", nice=False) if log else alt.Scale(zero=False)
+    y_scale = alt.Scale(zero=False)
     y = alt.Y(f"{value_name}:Q", title=None, scale=y_scale, axis=alt.Axis(format=",.0f", tickCount=6))
 
     baseline = alt.Chart(pd.DataFrame({"y": [100]})).mark_rule(color=AXIS, strokeWidth=1).encode(y=alt.Y("y:Q", scale=y_scale))
@@ -115,7 +115,7 @@ def comparison_lines(df, highlighted, color_by_asset, log=False):
 
 
 def underwater(drawdown_df, highlighted, color_by_asset):
-    """Drawdown 'under water': how far each asset sits below its previous peak, worst point annotated."""
+    """Drawdown 'under water': how far each asset sits below its previous peak."""
     value_name = "Drawdown"
     data = to_long(drawdown_df, value_name)
     start, end = drawdown_df.index.min(), drawdown_df.index.max()
@@ -129,14 +129,6 @@ def underwater(drawdown_df, highlighted, color_by_asset):
     if highlighted:
         layers += _focus_layers(data, x_scale, value_name, ".1%", highlighted, color_by_asset, 0,
                                 lambda a, v: f"{a}  {v:.0%}", below=True)
-        worst = data[data["Asset"].isin(highlighted)].loc[lambda d: d.groupby("Asset")[value_name].idxmin()].copy()
-        worst["note"] = [f"{v:.0%} · {d:%b %Y}" for v, d in zip(worst[value_name], worst["Date"])]
-        layers += [
-            alt.Chart(worst).mark_point(shape="triangle-down", size=70, filled=True, color=INK).encode(
-                x=alt.X("Date:T", scale=x_scale), y=f"{value_name}:Q"),
-            alt.Chart(worst).mark_text(dy=16, fontSize=10, font=MONO, color=INK_2).encode(
-                x=alt.X("Date:T", scale=x_scale), y=f"{value_name}:Q", text="note:N"),
-        ]
     return alt.layer(*layers)
 
 
@@ -156,11 +148,22 @@ def small_multiples(df, value_name, y_format, columns=3, independent_y=False):
         x="independent").resolve_scale(y="independent" if independent_y else "shared")
 
 
-def return_risk_bubbles(summary):
-    """Return vs volatility. Bubble size = deepest fall. Shaded 'efficient' corner and the
-    average return/risk line give the reader two references."""
+def small_chart(df, value_name, y_format):
+    """Small single-asset chart with a soft gradient, titled with the asset name."""
+    asset = df.columns[0]
+    data = to_long(df, value_name)
+    return alt.Chart(data, title=alt.TitleParams(asset, anchor="start", font=FONT, fontSize=12, fontWeight=600,
+                                                 color=INK, offset=8)).mark_area(
+        color=_fade(SERIES[0], 0.18), line={"color": SERIES[0], "strokeWidth": 1.5}).encode(
+        x=alt.X("Date:T", title=None, axis=alt.Axis(format="%Y", tickCount="year", labelOverlap=True)),
+        y=alt.Y(f"{value_name}:Q", title=None, scale=alt.Scale(zero=False), axis=alt.Axis(format=y_format, tickCount=3)),
+        tooltip=[alt.Tooltip("Date:T", format="%d %b %Y"), alt.Tooltip(f"{value_name}:Q", format=y_format)],
+    )
+
+
+def return_risk_scatter(summary):
+    """Annual return vs annual volatility, one point per asset (as in notebook 02)."""
     data = summary.reset_index(names="Asset")
-    data["Deepest fall"] = data["Max drawdown (%)"].abs()
     xv, yv = data["Annual volatility (%)"], data["Annual return (%)"]
     x_lo, x_hi = max(0, xv.min() - 4), xv.max() + (xv.max() - xv.min()) * 0.38 + 2
     y_lo, y_hi = min(0, yv.min()) - 4, yv.max() + 5
@@ -168,29 +171,9 @@ def return_risk_bubbles(summary):
     y_scale = alt.Scale(domain=[y_lo, y_hi], nice=False)
     x = alt.X("Annual volatility (%):Q", title="Annual volatility (%)", scale=x_scale, axis=alt.Axis(tickCount=8))
     y = alt.Y("Annual return (%):Q", title="Annual return (%)", scale=y_scale)
-
-    med_x, med_y = xv.median(), yv.median()
-    zone = alt.Chart(pd.DataFrame({"x": [x_lo], "x2": [med_x], "y": [med_y], "y2": [y_hi]})).mark_rect(
-        color=_rgba(SERIES[0], 0.06)).encode(x=alt.X("x:Q", scale=x_scale), x2="x2:Q",
-                                             y=alt.Y("y:Q", scale=y_scale), y2="y2:Q")
-    zone_label = alt.Chart(pd.DataFrame({"x": [x_lo], "y": [y_hi], "t": ["LESS RISK · MORE RETURN"]})).mark_text(
-        align="left", baseline="top", dx=8, dy=8, font=MONO, fontSize=9, color=SERIES[0]).encode(
-        x=alt.X("x:Q", scale=x_scale), y=alt.Y("y:Q", scale=y_scale), text="t:N")
-
-    ratio = (yv / xv).mean()
-    line_df = pd.DataFrame({"Annual volatility (%)": [x_lo, x_hi], "Annual return (%)": [ratio * x_lo, ratio * x_hi]})
-    if ratio * x_hi > y_hi:  # stop the line where it leaves the plot
-        line_df.iloc[1] = [y_hi / ratio, y_hi]
-    avg_line = alt.Chart(line_df).mark_line(color=INK_2, strokeWidth=1, strokeDash=[4, 4], opacity=0.6).encode(x=x, y=y)
-    avg_label = alt.Chart(line_df.tail(1).assign(t="average return / risk")).mark_text(
-        align="right", baseline="bottom", dy=-4, font=MONO, fontSize=9, color=MUTED).encode(x=x, y=y, text="t:N")
-
     zero = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color=AXIS).encode(y=alt.Y("y:Q", scale=y_scale))
-    bubbles = alt.Chart(data).mark_circle(color=SERIES[0], opacity=0.55, stroke=SERIES[0], strokeWidth=1.2).encode(
+    points = alt.Chart(data).mark_circle(size=120, color=SERIES[0], opacity=1, stroke=SURFACE, strokeWidth=2).encode(
         x=x, y=y,
-        size=alt.Size("Deepest fall:Q", scale=alt.Scale(range=[90, 1100], zero=False),
-                      legend=alt.Legend(title="DEEPEST FALL (%)", format=".0f", symbolFillColor=_rgba(SERIES[0], 0.4),
-                                        symbolStrokeColor=SERIES[0], symbolType="circle", tickCount=3)),
         tooltip=["Asset", alt.Tooltip("Annual return (%):Q", format=".1f"),
                  alt.Tooltip("Annual volatility (%):Q", format=".1f"),
                  alt.Tooltip("Return / risk ratio:Q", format=".2f"),
@@ -198,7 +181,7 @@ def return_risk_bubbles(summary):
     labels = alt.Chart(_label_positions(data, (x_lo, x_hi))).mark_text(
         align="left", dx=0, fontSize=11, fontWeight=500, color=INK).encode(
         x=alt.X("label_x:Q", scale=x_scale), y=alt.Y("label_y:Q", scale=y_scale), text="Asset:N")
-    return alt.layer(zone, zone_label, zero, avg_line, avg_label, bubbles, labels)
+    return alt.layer(zero, points, labels)
 
 
 def _label_positions(data, x_domain, x="Annual volatility (%)", y="Annual return (%)",
@@ -210,8 +193,7 @@ def _label_positions(data, x_domain, x="Annual volatility (%)", y="Annual return
     x_per_px = (x_domain[1] - x_domain[0]) / plot_width
     line = y_span / plot_height * 14
     char = x_per_px * 6.4
-    sizes = data["Deepest fall"]
-    radius_px = ((90 + (sizes - sizes.min()) / ((sizes.max() - sizes.min()) or 1) * 1010) ** 0.5) / 2
+    radius_px = pd.Series(7.0, index=data.index)  # points of size 120 -> radius about 6 px
     boxes = [(r[x] - rp * x_per_px, r[x] + rp * x_per_px, r[y]) for (_, r), rp in zip(data.iterrows(), radius_px)]
     label_x, label_y = [], []
     for (_, row), rp in zip(data.iterrows(), radius_px):

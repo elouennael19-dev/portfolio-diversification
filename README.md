@@ -5,7 +5,7 @@ from data collection to risk analysis.
 
 **Live app: [elouennael19dev-portfolio-diversification.streamlit.app](https://elouennael19dev-portfolio-diversification.streamlit.app)**
 
-> Work in progress: the data preparation and the individual asset analysis are done; the correlation analysis is in progress.
+> Work in progress: the data preparation, the individual asset analysis and the correlation analysis are done; the portfolio construction is next.
 
 ## Objective
 This project analyses how diversification affects the risk and return of an investment portfolio.
@@ -70,7 +70,7 @@ Then run the notebooks in order. Notebook 01 downloads the data and creates
 The `app/` folder contains a Streamlit interface that runs parts 1 and 2 with your own parameters, on three screens:
 0. **Project**: a timeline of the project steps and the approach behind each notebook.
 1. **Portfolio**: search assets by name (or pick popular ones), review the list, choose the currency and the period.
-2. **Report**: key figures, return vs risk, growth of 100 (with log scale and period buttons), drawdowns and the full table.
+2. **Report**: key figures, return vs risk, growth of 100, drawdowns and the full table — the same indicators as notebooks 01 and 02.
 
 The parameters are stored in the page URL, so a link reopens the same report.
 
@@ -83,7 +83,7 @@ streamlit run app/streamlit_app.py
 ## Roadmap
 - [x] Data collection and preparation
 - [x] Individual asset analysis
-- [ ] Correlations between assets (in progress)
+- [x] Correlations between assets
 - [ ] Portfolio construction
 - [ ] Markowitz optimisation
 - [ ] Risk analysis (VaR, CVaR)

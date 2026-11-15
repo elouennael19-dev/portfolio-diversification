@@ -10,3 +10,6 @@ codeFont = "Fira Code:https://fonts.googleapis.com/css2?family=Fira+Code:wght@40
 
 [client]
 toolbarMode = "minimal"
+
+[server]
+enableStaticServing = true
