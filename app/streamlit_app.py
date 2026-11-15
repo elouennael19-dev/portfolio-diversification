@@ -16,10 +16,22 @@ APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR.parent))  # project root, for `src`
 sys.path.insert(0, str(APP_DIR))         # app folder, for `charts` and `style`
 
-import charts  # noqa: E402
+import importlib  # noqa: E402
+
+import src.analysis  # noqa: E402
+import src.correlation  # noqa: E402
+import src.data  # noqa: E402
 import style  # noqa: E402
+import charts  # noqa: E402
 import timeline  # noqa: E402
 import author  # noqa: E402
+
+# Reload the project modules on every run: after a push, the server (Streamlit Cloud) re-runs this
+# file but would otherwise keep the old versions of these modules in memory. Order matters:
+# a module is reloaded after the modules it imports from.
+for _module in (src.data, src.analysis, src.correlation, style, charts, timeline, author):
+    importlib.reload(_module)
+
 from src.analysis import build_summary, compute_drawdown, compute_returns, normalise_prices  # noqa: E402
 from src.correlation import (EXTREME_SHARE, REFERENCE_TICKER, ROLLING_WINDOW,  # noqa: E402
                              compute_average_correlation, compute_correlation, compute_extreme_days,
